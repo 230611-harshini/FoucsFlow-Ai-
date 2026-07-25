@@ -52,11 +52,17 @@ const Auth = () => {
 
     try {
       if (isLogin) {
-        const { error } = await signIn(email, password);
+        const { error, session } = await signIn(email, password);
         if (error) {
           toast({
             title: "Sign in failed",
             description: error.message,
+            variant: "destructive",
+          });
+        } else if (!session) {
+          toast({
+            title: "Sign in pending",
+            description: "Please verify your email or complete the authentication flow.",
             variant: "destructive",
           });
         } else {
@@ -67,12 +73,17 @@ const Auth = () => {
           navigate("/dashboard");
         }
       } else {
-        const { error } = await signUp(email, password, name);
+        const { error, session } = await signUp(email, password, name);
         if (error) {
           toast({
             title: "Sign up failed",
             description: error.message,
             variant: "destructive",
+          });
+        } else if (!session) {
+          toast({
+            title: "Verify your email",
+            description: "A confirmation link has been sent to your inbox.",
           });
         } else {
           toast({

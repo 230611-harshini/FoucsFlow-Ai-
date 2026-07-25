@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 
@@ -13,6 +12,7 @@ export interface Task {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  user_id?: string;
 }
 
 export interface TaskReminder {
@@ -23,6 +23,16 @@ export interface TaskReminder {
   is_sent: boolean;
 }
 
+// Local storage helpers
+const getTasks = (userId: string): Task[] => {
+  const stored = localStorage.getItem(`focusflow_tasks_${userId}`);
+  return stored ? JSON.parse(stored) : [];
+};
+
+const saveTasks = (userId: string, tasks: Task[]) => {
+  localStorage.setItem(`focusflow_tasks_${userId}`, JSON.stringify(tasks));
+};
+
 export const useTasks = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -32,17 +42,8 @@ export const useTasks = () => {
   const fetchTasks = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching tasks:', error);
-      toast({ title: 'Error', description: 'Failed to load tasks', variant: 'destructive' });
-    } else {
-      setTasks(data as Task[]);
-    }
+    const storedTasks = getTasks(user.id);
+    setTasks(storedTasks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     setLoading(false);
   };
 
@@ -59,45 +60,39 @@ export const useTasks = () => {
   ) => {
     if (!user) return null;
 
-    const { data: task, error } = await supabase
-      .from('tasks')
-      .insert({
-        user_id: user.id,
-        title,
-        priority,
-        description: description || null,
-        due_date: dueDate?.toISOString() || null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast({ title: 'Error', description: 'Failed to add task', variant: 'destructive' });
-      return null;
-    }
+    const newTask: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      user_id: user.id,
+      title,
+      priority,
+      description: description || null,
+      due_date: dueDate?.toISOString() || null,
+      is_completed: false,
+      completed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
     // Add reminder if provided
-    if (reminder && task) {
-      await addReminder(task.id, reminder.time, reminder.type);
+    if (reminder) {
+      addReminder(newTask.id, reminder.time, reminder.type);
     }
 
-    setTasks([task as Task, ...tasks]);
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    saveTasks(user.id, updatedTasks);
     toast({ title: 'Task added', description: `"${title}" has been added to your list.` });
-    return task;
+    return newTask;
   };
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id);
+    if (!user) return false;
 
-    if (error) {
-      toast({ title: 'Error', description: 'Failed to update task', variant: 'destructive' });
-      return false;
-    }
-
-    setTasks(tasks.map(t => t.id === id ? { ...t, ...updates } : t));
+    const updatedTasks = tasks.map(t => 
+      t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
+    );
+    setTasks(updatedTasks);
+    saveTasks(user.id, updatedTasks);
     return true;
   };
 
@@ -114,17 +109,11 @@ export const useTasks = () => {
   };
 
   const deleteTask = async (id: string) => {
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id);
+    if (!user) return false;
 
-    if (error) {
-      toast({ title: 'Error', description: 'Failed to delete task', variant: 'destructive' });
-      return false;
-    }
-
-    setTasks(tasks.filter(t => t.id !== id));
+    const updatedTasks = tasks.filter(t => t.id !== id);
+    setTasks(updatedTasks);
+    saveTasks(user.id, updatedTasks);
     toast({ title: 'Task deleted', description: 'The task has been removed.' });
     return true;
   };
@@ -132,47 +121,41 @@ export const useTasks = () => {
   const addReminder = async (taskId: string, reminderTime: Date, reminderType: 'email' | 'in_app' | 'both') => {
     if (!user) return null;
 
-    const { data, error } = await supabase
-      .from('task_reminders')
-      .insert({
-        task_id: taskId,
-        user_id: user.id,
-        reminder_time: reminderTime.toISOString(),
-        reminder_type: reminderType,
-      })
-      .select()
-      .single();
+    const reminder: TaskReminder = {
+      id: Math.random().toString(36).substr(2, 9),
+      task_id: taskId,
+      reminder_time: reminderTime.toISOString(),
+      reminder_type: reminderType,
+      is_sent: false,
+    };
 
-    if (error) {
-      console.error('Error adding reminder:', error);
-      return null;
-    }
+    const stored = localStorage.getItem(`focusflow_reminders_${user.id}`);
+    const reminders: TaskReminder[] = stored ? JSON.parse(stored) : [];
+    reminders.push(reminder);
+    localStorage.setItem(`focusflow_reminders_${user.id}`, JSON.stringify(reminders));
+    return reminder;
 
-    return data;
+    return reminder;
   };
 
   const getTaskReminders = async (taskId: string) => {
-    const { data, error } = await supabase
-      .from('task_reminders')
-      .select('*')
-      .eq('task_id', taskId)
-      .order('reminder_time', { ascending: true });
+    if (!user) return [];
 
-    if (error) {
-      console.error('Error fetching reminders:', error);
-      return [];
-    }
-
-    return data as TaskReminder[];
+    const stored = localStorage.getItem(`focusflow_reminders_${user.id}`);
+    const reminders: TaskReminder[] = stored ? JSON.parse(stored) : [];
+    return reminders.filter(r => r.task_id === taskId).sort((a, b) => 
+      new Date(a.reminder_time).getTime() - new Date(b.reminder_time).getTime()
+    );
   };
 
   const deleteReminder = async (reminderId: string) => {
-    const { error } = await supabase
-      .from('task_reminders')
-      .delete()
-      .eq('id', reminderId);
+    if (!user) return false;
 
-    return !error;
+    const stored = localStorage.getItem(`focusflow_reminders_${user.id}`);
+    const reminders: TaskReminder[] = stored ? JSON.parse(stored) : [];
+    const filtered = reminders.filter(r => r.id !== reminderId);
+    localStorage.setItem(`focusflow_reminders_${user.id}`, JSON.stringify(filtered));
+    return true;
   };
 
   return {

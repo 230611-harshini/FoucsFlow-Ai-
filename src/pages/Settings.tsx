@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 type ThemeMode = 'light' | 'dark' | 'system';
 type SettingsTab = 'profile' | 'appearance' | 'notifications' | 'feedback' | 'help';
@@ -115,11 +114,23 @@ const Settings = () => {
     
     setIsUpdatingProfile(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullName }
-      });
+      // Update profile in localStorage
+      const updatedUser = {
+        ...user,
+        user_metadata: {
+          ...user.user_metadata,
+          full_name: fullName
+        }
+      };
       
-      if (error) throw error;
+      // Save to localStorage (user session stores the full user object)
+      const session = localStorage.getItem(`focusflow_session`);
+      if (session) {
+        const sessionData = JSON.parse(session);
+        sessionData.user = updatedUser;
+        localStorage.setItem(`focusflow_session`, JSON.stringify(sessionData));
+      }
+      
       toast.success('Profile updated successfully!');
     } catch (error: any) {
       toast.error(error.message || 'Failed to update profile');

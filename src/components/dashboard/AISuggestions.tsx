@@ -4,7 +4,6 @@ import { Sparkles, Send, Bot, User, Loader2, Target, Clock, Lightbulb, Zap } fro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supabase } from "@/integrations/supabase/client";
 
 interface Task {
   id: string;
@@ -29,6 +28,33 @@ const quickSuggestions = [
   { text: "Help me plan my day", icon: Clock },
   { text: "How can I stay focused?", icon: Zap },
 ];
+
+// Simple local AI suggestions
+const generateAISuggestion = (message: string, tasks: Task[]): string => {
+  const pendingTasks = tasks.filter(t => !t.is_completed);
+  const highPriorityTasks = pendingTasks.filter(t => t.priority === "high");
+  
+  const suggestions: Record<string, string> = {
+    "prioritize": `Based on your tasks, here's my recommendation: Focus on ${highPriorityTasks.length > 0 ? highPriorityTasks[0].title : "your most important task"} first. Breaking down large tasks into smaller steps helps maintain momentum.`,
+    "productivity": "Try the Pomodoro technique: 25 minutes of focused work, then a 5-minute break. This helps maintain energy and focus throughout the day.",
+    "plan": `You have ${pendingTasks.length} pending tasks. I suggest: Start with high-priority items, tackle them early when your energy is high, and schedule breaks between tasks.`,
+    "focused": "Key strategies for focus: Remove distractions, use ambient sounds or music, set clear goals, and celebrate small wins. Remember to take breaks!",
+  };
+
+  const lowerMessage = message.toLowerCase();
+  
+  if (lowerMessage.includes("priorit") || lowerMessage.includes("order")) {
+    return suggestions["prioritize"];
+  } else if (lowerMessage.includes("produc") || lowerMessage.includes("tip")) {
+    return suggestions["productivity"];
+  } else if (lowerMessage.includes("plan") || lowerMessage.includes("day")) {
+    return suggestions["plan"];
+  } else if (lowerMessage.includes("focus") || lowerMessage.includes("concent")) {
+    return suggestions["focused"];
+  }
+  
+  return "Great question! I can help with productivity tips, task prioritization, focus strategies, and daily planning. What would you like to know more about?";
+};
 
 export const AISuggestions = ({ tasks = [] }: AISuggestionsProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -78,22 +104,20 @@ export const AISuggestions = ({ tasks = [] }: AISuggestionsProps) => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-assistant', {
-        body: { message: messageText, tasks }
-      });
-
-      if (error) throw error;
-
+      // Simulate AI response delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const reply = generateAISuggestion(messageText, tasks);
       const assistantMessage: Message = { 
         role: "assistant", 
-        content: data.reply || "I couldn't process that. Please try again." 
+        content: reply
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('AI Assistant error:', error);
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: "Sorry, I'm having trouble connecting. Please try again in a moment." 
+        content: "Sorry, I'm having trouble processing that. Please try again." 
       }]);
     } finally {
       setIsLoading(false);

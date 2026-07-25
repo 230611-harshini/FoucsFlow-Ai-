@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
 import { useMoodDetection, Mood } from "@/hooks/useMoodDetection";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FocusGuardianProps {
   isTimerRunning: boolean;
@@ -15,6 +15,7 @@ interface FocusGuardianProps {
 
 export const FocusGuardian = ({ isTimerRunning, onPauseTimer, onResumeTimer }: FocusGuardianProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(false);
   const [nudgePlayed, setNudgePlayed] = useState(false);
@@ -23,15 +24,11 @@ export const FocusGuardian = ({ isTimerRunning, onPauseTimer, onResumeTimer }: F
   const [breathPhase, setBreathPhase] = useState<"inhale" | "hold" | "exhale">("inhale");
 
   useEffect(() => {
-    const fetchName = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from("profiles").select("full_name").eq("user_id", user.id).single();
-        if (data?.full_name) setUserName(data.full_name.split(" ")[0]);
-      }
-    };
-    fetchName();
-  }, []);
+    if (user?.user_metadata?.full_name) {
+      const firstName = user.user_metadata.full_name.split(" ")[0];
+      setUserName(firstName);
+    }
+  }, [user]);
 
   const playNudge = useCallback(() => {
     if (nudgePlayed) return;

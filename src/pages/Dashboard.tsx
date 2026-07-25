@@ -35,7 +35,6 @@ import { EnhancedTimer } from "@/components/dashboard/EnhancedTimer";
 import { MindReliefGames } from "@/components/dashboard/MindReliefGames";
 import { FeatureNav } from "@/components/dashboard/FeatureNav";
 import { AISuggestions } from "@/components/dashboard/AISuggestions";
-import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
   const navigate = useNavigate();

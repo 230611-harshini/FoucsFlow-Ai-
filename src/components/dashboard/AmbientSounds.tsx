@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Volume2, VolumeX, CloudRain, Wind, Coffee, Waves, TreePine, Music2, Upload, X, Play, Pause, Trash2, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useBrowserNotifications } from "@/hooks/useBrowserNotifications";
 import { Slider } from "@/components/ui/slider";
@@ -31,7 +30,6 @@ interface CustomSound {
   id: string;
   label: string;
   url: string;
-  isFromDb?: boolean;
 }
 
 export const AmbientSounds = () => {
@@ -88,31 +86,20 @@ export const AmbientSounds = () => {
     };
   }, [isPlaying, breakTimerEnabled, breakTimeRemaining, sendBreakEndReminder]);
 
-  // Load custom sounds from database
+  // Load custom sounds from localStorage
   useEffect(() => {
     if (user) {
       loadCustomSounds();
     }
   }, [user]);
 
-  const loadCustomSounds = async () => {
+  const loadCustomSounds = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('custom_sounds')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      if (data) {
-        const sounds: CustomSound[] = data.map((sound: any) => ({
-          id: sound.id,
-          label: sound.name,
-          url: sound.file_path,
-          isFromDb: true
-        }));
+      const stored = localStorage.getItem(`focusflow_custom_sounds_${user.id}`);
+      if (stored) {
+        const sounds: CustomSound[] = JSON.parse(stored);
         setCustomSounds(sounds);
       }
     } catch (error) {
